@@ -216,7 +216,11 @@ def get_bookmark(name):
 
 
 def init_prom_client():
-    return Client(Context.config['endpoint'])
+    auth = None
+    if Context.config['auth']:
+        auth = (Context.config['auth']['username'], Context.config['auth']['password'])
+
+    return Client(Context.config['endpoint'], auth)
 
 
 @utils.handle_top_exception(LOGGER)

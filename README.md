@@ -9,11 +9,15 @@ Sample config to calculate daily online peak by customer and environment:
 ```$json
 {
   "endpoint": "http://localhost:9000",
+  "auth": {
+    "username": "prometheus",
+    "password": "123"
+  },
   "start_date": "2018-11-01T00:00:00Z",
   "metrics": [
     {
       "name": "online_peak",
-      "query": "sum by(customer, environment) (sessions_count)",
+      "query": "sum(sessions_count)",
       "aggregations": [
         "max"
       ],
@@ -35,6 +39,13 @@ Sample config to calculate daily online peak by customer and environment:
 }
 ```
 
+The top-level configuration settings for this tap are
+
+* `endpoint` *required*: The Prometheus API endpoint URL - do not include the obligatory `/api/v1` suffix in here, the tap will add this itself
+* `auth` *optional*: HTTP basic auth `username` and `password`
+* `start_date` *required*: Earliest date from which to start collecting data
+* `metrics` *required: Definition of individual prometheus metric query streams
+  
 This tap emits a stream for every `metric` definition.
 
 * `query`: PromQL query, must be a range query
