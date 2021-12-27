@@ -5,6 +5,7 @@ This is a [Singer](https://singer.io) tap that produces JSON-formatted data foll
 Module loads PromQL query result for every period specified, calculates an aggregation locally and pushes the result as a record.
 
 Sample config to calculate daily online peak:
+
 ```$json
 {
   "endpoint": "http://localhost:9000",
@@ -15,17 +16,19 @@ Sample config to calculate daily online peak:
         "query": "sum(sessions_count)",
         "aggregations": ["max"],
         "period": "day",
-        "step": 120
+        "step": "120s"
     }
   ]
 }
 ```
-* step: metrics resolution, see 
 
-Only day long periods and only "max", "min", "avg" aggregations are supported now. 
+* `query`: PromQL query, must be a range query
+* `aggregations`: The type of aggregation to run on the result, one of "max", "min", "avg"
+* `period`: The aggregation period to run on the result, only "day" is supported
+* `step`: metrics resolution as a [duration string](https://prometheus.io/docs/prometheus/latest/querying/basics/#time-durations)
 
-Several source code parts copied from: 
+Several source code parts copied from:
+
 * tap-stripe: https://github.com/singer-io/tap-stripe
 
-Module based on the patched python Prometheus API client *promalyze*: https://github.com/JustEdro/promalyze
-Load it and install directly (python setup.py install) first.
+Module based on the patched python Prometheus API client *promalyze*: https://github.com/meshcloud/promalyze

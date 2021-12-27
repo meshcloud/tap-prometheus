@@ -114,7 +114,7 @@ def sync(client):
         period = metric['period']
         step = metric['step']
 
-        LOGGER.info('Loading metric "%s" using query "%s", aggregation: %s, period: %s, metric step: %d seconds',
+        LOGGER.info('Loading metric "%s" using query "%s", aggregation: %s, period: %s, metric step: %s',
                     name, query, aggregations, period, step)
 
         query_metric(client, name, query, aggregations, period, step)
