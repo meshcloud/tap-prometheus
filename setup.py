@@ -10,12 +10,9 @@ setup(name='tap-prometheus',
       classifiers=['Programming Language :: Python :: 3 :: Only'],
       py_modules=['tap_prometheus'],
       install_requires=[
-          'singer-python==5.2.3',
-          'promalyze==0.0.2',
+          'singer-python==5.12.2',
+          'promalyze @ git+https://github.com/meshcloud/promalyze.git#egg=promalyze-0.0.3',
           'pytz'
-      ],
-      dependency_links=[
-          'git+https://github.com/miroapp/promalyze.git#egg=promalyze-0.0.2',
       ],
       entry_points='''
           [console_scripts]
