@@ -36,7 +36,8 @@ class Context:
 
     @classmethod
     def get_schema(cls, stream_name):
-        stream = [s for s in cls.catalog["streams"] if s["tap_stream_id"] == stream_name][0]
+        stream = [s for s in cls.catalog["streams"]
+                  if s["tap_stream_id"] == stream_name][0]
         return stream["schema"]
 
     @classmethod
@@ -63,31 +64,31 @@ def get_abs_path(path):
 
 
 # Load schemas from schemas folder
-def load_schemas():
-    schemas = {}
-
-    for filename in os.listdir(get_abs_path('schemas')):
-        path = get_abs_path('schemas') + '/' + filename
-        file_raw = filename.replace('.json', '')
-        with open(path) as file:
-            schemas[file_raw] = json.load(file)
-
-    return schemas
+def load_schema():
+    filename = "aggregated_metric_history.json"
+    path = get_abs_path('schemas') + '/' + filename
+    with open(path) as file:
+        schema: dict = json.load(file)
+        return schema
 
 
 def discover():
-    raw_schemas = load_schemas()
+    raw_schema = load_schema()
     streams = []
 
-    for schema_name, schema in raw_schemas.items():
+    for metric in Context.config['metrics']:
+        # build a schema by merging the raw schema and the metric configuration
+        schema = raw_schema.copy()
+        schema['properties']['labels'] = metric['labels']
+
         # create and add catalog entry
         catalog_entry = {
-            'stream': schema_name,
-            'tap_stream_id': schema_name,
+            'stream': metric['name'],
+            'tap_stream_id': metric['name'],
             'schema': schema,
             # TODO Events may have a different key property than this. Change
             # if it's appropriate.
-            'key_properties': ['date', 'metric', 'aggregation']
+            'key_properties': ['date', 'metric', 'aggregation', 'labels']
         }
         streams.append(catalog_entry)
 
@@ -98,7 +99,8 @@ def sync(client):
     # Write all schemas and init count to 0
     for catalog_entry in Context.catalog['streams']:
         stream_name = catalog_entry["tap_stream_id"]
-        singer.write_schema(stream_name, catalog_entry['schema'], catalog_entry['key_properties'])
+        singer.write_schema(
+            stream_name, catalog_entry['schema'], catalog_entry['key_properties'])
 
         Context.new_counts[stream_name] = 0
         Context.updated_counts[stream_name] = 0
@@ -121,13 +123,14 @@ def sync(client):
 
 
 def query_metric(client, name, query, aggregations, period, step):
-    stream_name = 'aggregated_metric_history'
+    stream_name = name # the stream has the same name as the metric in the config
     catalog_entry = Context.get_catalog_entry(stream_name)
     stream_schema = catalog_entry['schema']
 
     bookmark = get_bookmark(name)
 
-    bookmark_unixtime = int(datetime.strptime(bookmark, DATE_FORMAT).replace(tzinfo=pytz.UTC).timestamp())
+    bookmark_unixtime = int(datetime.strptime(
+        bookmark, DATE_FORMAT).replace(tzinfo=pytz.UTC).timestamp())
     extraction_time = singer.utils.now()
     current_unixtime = int(extraction_time.timestamp())
 
@@ -146,11 +149,10 @@ def query_metric(client, name, query, aggregations, period, step):
                 step=step
             )  # returns PrometheusData object
 
-            if len(ts_data.timeseries) > 0:
-                ts = ts_data.timeseries[0]  # returns a TimeSeries object
-
+            for ts in ts_data.timeseries:
                 dataframe = ts.as_pandas_dataframe()
                 dataframe['values'] = dataframe['values'].astype(float)
+                labels = ts.metadata
 
                 for aggregation in aggregations:
                     aggregated_value = aggregate(aggregation, dataframe)
@@ -159,6 +161,7 @@ def query_metric(client, name, query, aggregations, period, step):
                     data = {
                         "date": iterator_unixtime,
                         "metric": name,
+                        "labels": labels,
                         "aggregation": aggregation,
                         "value": aggregated_value
                     }
@@ -172,14 +175,16 @@ def query_metric(client, name, query, aggregations, period, step):
 
                     Context.new_counts[stream_name] += 1
 
-            else:
-                LOGGER.warn('Request %s returned an empty result for the date %s', query, iterator_unixtime)
+            if len(ts_data.timeseries) == 0:
+                LOGGER.warn(
+                    'Request %s returned an empty result for the date %s', query, iterator_unixtime)
 
             singer.write_bookmark(
                 Context.state,
                 name,
                 'start_date',
-                datetime.utcfromtimestamp(iterator_unixtime + period_seconds).strftime(DATE_FORMAT)
+                datetime.utcfromtimestamp(
+                    iterator_unixtime + period_seconds).strftime(DATE_FORMAT)
             )
 
             # write state after every 100 records
@@ -218,6 +223,7 @@ def init_prom_client():
 def main():
     # Parse command line arguments
     args = utils.parse_args(REQUIRED_CONFIG_KEYS)
+    Context.config = args.config
 
     # If discover flag was passed, run discovery mode and dump output to stdout
     if args.discover:
@@ -231,7 +237,6 @@ def main():
         else:
             Context.catalog = discover()
 
-        Context.config = args.config
         Context.state = args.state
 
         client = init_prom_client()
