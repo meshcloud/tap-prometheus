@@ -31,7 +31,8 @@ class Context:
     @classmethod
     def get_catalog_entry(cls, stream_name):
         if not cls.stream_map:
-            cls.stream_map = {s["tap_stream_id"]: s for s in cls.catalog['streams']}
+            cls.stream_map = {s["tap_stream_id"]
+                : s for s in cls.catalog['streams']}
         return cls.stream_map.get(stream_name)
 
     @classmethod
@@ -108,39 +109,33 @@ def sync(client):
     for metric in Context.config['metrics']:
         name = metric['name']
         query = metric['query']
-        aggregations = []
-        if 'aggregations' in metric:
-            aggregations = metric['aggregations']
-        if 'aggregation' in metric:
-            aggregations = [metric['aggregation']]
-        period = metric['period']
+        batch = metric['batch']
         step = metric['step']
 
-        LOGGER.info('Loading metric "%s" using query "%s", aggregation: %s, period: %s, metric step: %s',
-                    name, query, aggregations, period, step)
+        LOGGER.info('Loading metric "%s" using query "%s", metric batch: %s, metric step: %s',
+                    name, query, batch, step)
 
-        query_metric(client, name, query, aggregations, period, step)
+        query_metric(client, name, query, batch, step)
 
 
-def query_metric(client, name, query, aggregations, period, step):
-    stream_name = name # the stream has the same name as the metric in the config
+def query_metric(client, name, query, batch, step):
+    stream_name = name  # the stream has the same name as the metric in the config
     catalog_entry = Context.get_catalog_entry(stream_name)
     stream_schema = catalog_entry['schema']
 
     bookmark = get_bookmark(name)
-
     bookmark_unixtime = int(datetime.strptime(
         bookmark, DATE_FORMAT).replace(tzinfo=pytz.UTC).timestamp())
+
     extraction_time = singer.utils.now()
     current_unixtime = int(extraction_time.timestamp())
 
-    if period == 'day':
-        period_seconds = 86400
-    else:
-        raise Exception("Period is not supported: " + period)
-
+    # we always start at the configured start_date and ever increase by multiple of step, so we should never lose alignment
+    period_seconds = batch * step
     iterator_unixtime = bookmark_unixtime
+
     with Transformer(singer.UNIX_SECONDS_INTEGER_DATETIME_PARSING) as transformer:
+
         while iterator_unixtime + period_seconds <= current_unixtime:
             ts_data = client.range_query(
                 query,
@@ -150,20 +145,14 @@ def query_metric(client, name, query, aggregations, period, step):
             )  # returns PrometheusData object
 
             for ts in ts_data.timeseries:
-                dataframe = ts.as_pandas_dataframe()
-                dataframe['values'] = dataframe['values'].astype(float)
                 labels = ts.metadata
 
-                for aggregation in aggregations:
-                    aggregated_value = aggregate(aggregation, dataframe)
-
-                    # print(" " + str(bookmark_unixtime) + " "+ str(aggregated_value))
+                for x in ts.ts:
                     data = {
-                        "date": iterator_unixtime,
+                        "date": x[0],
                         "metric": name,
                         "labels": labels,
-                        "aggregation": aggregation,
-                        "value": aggregated_value
+                        "value": x[1]
                     }
                     rec = transformer.transform(data, stream_schema)
 
@@ -187,25 +176,11 @@ def query_metric(client, name, query, aggregations, period, step):
                     iterator_unixtime + period_seconds).strftime(DATE_FORMAT)
             )
 
-            # write state after every 100 records
-            if (Context.new_counts[stream_name] % 100) == 0:
-                singer.write_state(Context.state)
-
+            # write state everytime, as batches might be quite large already
+            singer.write_state(Context.state)
             iterator_unixtime += period_seconds
 
     singer.write_state(Context.state)
-
-
-def aggregate(aggregation, dataframe):
-    if aggregation == 'max':
-        aggregated_value = dataframe.max()['values']
-    elif aggregation == 'min':
-        aggregated_value = dataframe.min()['values']
-    elif aggregation == 'avg':
-        aggregated_value = dataframe.mean()['values']
-    else:
-        raise Exception("Aggregation method not implemented: " + aggregation)
-    return aggregated_value
 
 
 def get_bookmark(name):
@@ -218,7 +193,8 @@ def get_bookmark(name):
 def init_prom_client():
     auth = None
     if Context.config['auth']:
-        auth = (Context.config['auth']['username'], Context.config['auth']['password'])
+        auth = (Context.config['auth']['username'],
+                Context.config['auth']['password'])
 
     return Client(Context.config['endpoint'], auth)
 

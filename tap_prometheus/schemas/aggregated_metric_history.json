@@ -17,12 +17,6 @@
         "string"
       ]
     },
-    "aggregation": {
-      "type": [
-        "null",
-        "string"
-      ]
-    },
     "value": {
       "type": [
         "null",
