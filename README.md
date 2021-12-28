@@ -57,3 +57,15 @@ Several source code parts copied from:
 * tap-stripe: https://github.com/singer-io/tap-stripe
 
 Module based on the patched python Prometheus API client *promalyze*: https://github.com/meshcloud/promalyze
+
+## Capabilities
+
+This tap supports incremental replication. It will run collection until the current extraction time rounded down to the last full step (see configuration).
+If you're using tap with meltano, configure it with the following capabilities
+
+```yml
+capabilities:
+- catalog
+- discover
+- state
+```

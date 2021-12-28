@@ -136,6 +136,8 @@ def query_metric(client: Client, name: str, query: str, batch: int, step: int):
     bookmark_unixtime = int(datetime.strptime(
         bookmark, DATE_FORMAT).replace(tzinfo=pytz.UTC).timestamp())
 
+    LOGGER.info(f'Stream {stream_name}: loaded bookmark @ {bookmark_unixtime}')
+
     extraction_time = singer.utils.now()
     current_unixtime = int(extraction_time.timestamp())
 
@@ -143,7 +145,7 @@ def query_metric(client: Client, name: str, query: str, batch: int, step: int):
     # so we should never lose alignment
     fetch_steps = int((current_unixtime - bookmark_unixtime) / step)
     iterator_unixtime = bookmark_unixtime
-
+    
     with Transformer(singer.UNIX_SECONDS_INTEGER_DATETIME_PARSING) as transformer:
 
         synced_steps = 0
@@ -151,7 +153,7 @@ def query_metric(client: Client, name: str, query: str, batch: int, step: int):
             batch_steps = min(batch, fetch_steps - synced_steps)
             next_iterator_unixtime = iterator_unixtime + (batch_steps * step)
             
-            LOGGER.info(f'Fetching a batch of {batch_steps} steps @ {step}s, from {iterator_unixtime} to {next_iterator_unixtime}. Already synced {synced_steps}/{fetch_steps} steps of.')
+            LOGGER.info(f'Stream {stream_name}: fetching a batch of {batch_steps} steps @ {step}s, from {iterator_unixtime} to {next_iterator_unixtime}. Already synced {synced_steps}/{fetch_steps} steps of.')
             
             ts_data = client.range_query(
                 query,
@@ -198,8 +200,9 @@ def query_metric(client: Client, name: str, query: str, batch: int, step: int):
             synced_steps += batch_steps
             iterator_unixtime = next_iterator_unixtime
 
+    # ensure we write state at least once, e.g. if we did have nothing to collect in an incremental run
     singer.write_state(Context.state)
-
+    
 
 def get_bookmark(name):
     bookmark = singer.get_bookmark(Context.state, name, 'start_date')
