@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from datetime import datetime
+from logging import Logger
 import pytz
 import os
 import json
@@ -31,8 +32,7 @@ class Context:
     @classmethod
     def get_catalog_entry(cls, stream_name):
         if not cls.stream_map:
-            cls.stream_map = {s["tap_stream_id"]
-                : s for s in cls.catalog['streams']}
+            cls.stream_map = {s["tap_stream_id"]: s for s in cls.catalog['streams']}
         return cls.stream_map.get(stream_name)
 
     @classmethod
@@ -118,7 +118,16 @@ def sync(client):
         query_metric(client, name, query, batch, step)
 
 
-def query_metric(client, name, query, batch, step):
+def query_metric(client: Client, name: str, query: str, batch: int, step: int):
+    """Queries a metric from the prometheus API and writes singer records
+
+    Args:
+        client: Prometheus API client
+        name: name of the metric
+        query: PromQL query
+        batch: The maximum batch size, i.e. how many steps to fetch at once
+        step: The step size in seconds
+    """
     stream_name = name  # the stream has the same name as the metric in the config
     catalog_entry = Context.get_catalog_entry(stream_name)
     stream_schema = catalog_entry['schema']
@@ -130,17 +139,24 @@ def query_metric(client, name, query, batch, step):
     extraction_time = singer.utils.now()
     current_unixtime = int(extraction_time.timestamp())
 
-    # we always start at the configured start_date and ever increase by multiple of step, so we should never lose alignment
-    period_seconds = batch * step
+    # we always start at the configured start_date and ever advance collection by multiple of step
+    # so we should never lose alignment
+    fetch_steps = int((current_unixtime - bookmark_unixtime) / step)
     iterator_unixtime = bookmark_unixtime
 
     with Transformer(singer.UNIX_SECONDS_INTEGER_DATETIME_PARSING) as transformer:
 
-        while iterator_unixtime + period_seconds <= current_unixtime:
+        synced_steps = 0
+        while synced_steps < fetch_steps:
+            batch_steps = min(batch, fetch_steps - synced_steps)
+            next_iterator_unixtime = iterator_unixtime + (batch_steps * step)
+            
+            LOGGER.info(f'Fetching a batch of {batch_steps} steps @ {step}s, from {iterator_unixtime} to {next_iterator_unixtime}. Already synced {synced_steps}/{fetch_steps} steps of.')
+            
             ts_data = client.range_query(
                 query,
                 start=iterator_unixtime,
-                end=iterator_unixtime + period_seconds,
+                end=next_iterator_unixtime,
                 step=step
             )  # returns PrometheusData object
 
@@ -173,12 +189,14 @@ def query_metric(client, name, query, batch, step):
                 name,
                 'start_date',
                 datetime.utcfromtimestamp(
-                    iterator_unixtime + period_seconds).strftime(DATE_FORMAT)
+                    next_iterator_unixtime).strftime(DATE_FORMAT)
             )
 
             # write state everytime, as batches might be quite large already
             singer.write_state(Context.state)
-            iterator_unixtime += period_seconds
+
+            synced_steps += batch_steps
+            iterator_unixtime = next_iterator_unixtime
 
     singer.write_state(Context.state)
 

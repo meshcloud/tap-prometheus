@@ -2,7 +2,7 @@
 
 This is a [Singer](https://singer.io) tap that produces JSON-formatted data following the [Singer spec](https://github.com/singer-io/getting-started/blob/master/SPEC.md).
 
-Module loads PromQL query result for every period specified, calculates an aggregation locally and pushes the result as a record.
+Module loads PromQL query result and pushes the result as a record.
 
 Sample config to calculate daily online peak by customer and environment:
 
@@ -18,11 +18,8 @@ Sample config to calculate daily online peak by customer and environment:
     {
       "name": "online_peak",
       "query": "sum(sessions_count)",
-      "aggregations": [
-        "max"
-      ],
-      "period": "day",
-      "step": "120s",
+      "batch": "10000",
+      "step": "120s", 
       "labels": {
         "type": "object",
         "properties": {
@@ -49,10 +46,11 @@ The top-level configuration settings for this tap are
 This tap emits a stream for every `metric` definition.
 
 * `query`: PromQL query, must be a range query
-* `aggregations`: The type of aggregation to run on the result, one of "max", "min", "avg"
-* `period`: The aggregation period to run on the result, only "day" is supported
-* `step`: metrics resolution as a [duration string](https://prometheus.io/docs/prometheus/latest/querying/basics/#time-durations)
+* `batch`: The maximum number of steps to move forward in the stream in one batch
+* `step`: metrics resolution in seconds
 * `labels`: JSON Schema for labels returned by the query. You can set this to `{"type": "null"}` if your query does not return any labels.
+
+You can tune `batch` size to your prometheus instance and singer tap memory requirements. For typical setups it should be fine to fetch up to 10.000 data points per prometheus API query.
 
 Several source code parts copied from:
 
