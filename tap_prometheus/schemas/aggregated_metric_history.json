@@ -11,12 +11,6 @@
       ],
       "format": "date-time"
     },
-    "metric": {
-      "type": [
-        "null",
-        "string"
-      ]
-    },
     "value": {
       "type": [
         "null",

@@ -89,7 +89,7 @@ def discover():
             'schema': schema,
             # TODO Events may have a different key property than this. Change
             # if it's appropriate.
-            'key_properties': ['date', 'metric', 'aggregation', 'labels']
+            'key_properties': ['date', 'labels']
         }
         streams.append(catalog_entry)
 
@@ -168,7 +168,6 @@ def query_metric(client: Client, name: str, query: str, batch: int, step: int):
                 for x in ts.ts:
                     data = {
                         "date": x[0],
-                        "metric": name,
                         "labels": labels,
                         "value": x[1]
                     }
