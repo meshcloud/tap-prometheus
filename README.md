@@ -41,7 +41,7 @@ The top-level configuration settings for this tap are
 * `endpoint` *required*: The Prometheus API endpoint URL - do not include the obligatory `/api/v1` suffix in here, the tap will add this itself
 * `auth` *optional*: HTTP basic auth `username` and `password`
 * `start_date` *required*: Earliest date from which to start collecting data
-* `metrics` *required: Definition of individual prometheus metric query streams
+* `metrics` *required*: Definition of individual prometheus metric query streams
   
 This tap emits a stream for every `metric` definition.
 
