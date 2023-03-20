@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
+from curses import raw
 from datetime import datetime
+from copy import deepcopy
 from logging import Logger
 import pytz
 import os
@@ -79,7 +81,7 @@ def discover():
 
     for metric in Context.config['metrics']:
         # build a schema by merging the raw schema and the metric configuration
-        schema = raw_schema.copy()
+        schema = deepcopy(raw_schema)
         schema['properties']['labels'] = metric['labels']
 
         # create and add catalog entry
