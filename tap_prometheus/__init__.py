@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
-from curses import raw
 from datetime import datetime
 from copy import deepcopy
-from logging import Logger
 import pytz
 import os
 import json
@@ -171,8 +169,9 @@ def query_metric(client: Client, name: str, query: str, batch: int, step: int):
                     data = {
                         "date": x[0],
                         "labels": labels,
-                        "value": x[1]
+                        "value": x[1] if not isinstance(x[1], str) else None
                     }
+
                     rec = transformer.transform(data, stream_schema)
 
                     singer.write_record(
