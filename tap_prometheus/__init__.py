@@ -203,7 +203,8 @@ def query_metric(client: Client, name: str, query: str, batch: int, step: int):
     # ensure we write state at least once, e.g. if we did have nothing to collect in an incremental run
     singer.write_state(Context.state)
     
-def try_parse_float(element: any) -> float|None:
+
+def try_parse_float(element: any):
     if element is None: 
         return None
     try:
