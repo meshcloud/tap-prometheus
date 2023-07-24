@@ -169,7 +169,7 @@ def query_metric(client: Client, name: str, query: str, batch: int, step: int):
                     data = {
                         "date": x[0],
                         "labels": labels,
-                        "value": x[1] if not isinstance(x[1], str) else None
+                        "value": try_parse_float(x[1])
                     }
 
                     rec = transformer.transform(data, stream_schema)
@@ -203,6 +203,14 @@ def query_metric(client: Client, name: str, query: str, batch: int, step: int):
     # ensure we write state at least once, e.g. if we did have nothing to collect in an incremental run
     singer.write_state(Context.state)
     
+def try_parse_float(element: any) -> float|None:
+    if element is None: 
+        return None
+    try:
+        return float(element)
+    except ValueError:
+        return None
+
 
 def get_bookmark(name):
     bookmark = singer.get_bookmark(Context.state, name, 'start_date')
