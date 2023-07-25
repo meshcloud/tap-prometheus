@@ -208,7 +208,10 @@ def try_parse_float(element: any):
     if element is None: 
         return None
     try:
-        return float(element)
+        # JSON can't represent NaN and +/-Inf, so we do a quick test for them and return None in that case
+        # see https://stackoverflow.com/a/62171968/125407
+        x = float(element)
+        return None if x != x else x
     except ValueError:
         return None
 
